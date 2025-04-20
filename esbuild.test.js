@@ -84,6 +84,7 @@ const testsConfig = {
 	format: "cjs",
 	platform: "node",
 	plugins: [esbuildProblemMatcherPlugin],
+	tsconfig: "tsconfig.test.json",
 	define: {
 		"process.env.IS_DEV": "true",
 		"process.env.IS_TEST": "true",
