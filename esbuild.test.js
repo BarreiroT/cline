@@ -1,6 +1,8 @@
 const esbuild = require("esbuild")
 const glob = require("glob")
 
+const watch = process.argv.includes("--watch")
+
 /**
  * @type {import('esbuild').Plugin}
  */
@@ -21,18 +23,7 @@ const esbuildProblemMatcherPlugin = {
 	},
 }
 
-const files = glob.sync("src/**/*.ts")
-
-const srcFiles = []
-const testFiles = []
-
-files.forEach((file) => {
-	if (file.endsWith(".test.ts")) {
-		testFiles.push(file)
-	} else {
-		srcFiles.push(file)
-	}
-})
+const srcFiles = glob.sync("src/**/*.ts").filter((file) => !file.endsWith(".test.ts"))
 
 const srcConfig = {
 	bundle: true,
@@ -88,10 +79,11 @@ const testsConfig = {
 	sourcemap: true,
 	sourcesContent: true,
 	logLevel: "silent",
-	entryPoints: testFiles,
+	entryPoints: ["src/**/*.test.ts"],
 	outdir: "out",
 	format: "cjs",
 	platform: "node",
+	plugins: [esbuildProblemMatcherPlugin],
 	define: {
 		"process.env.IS_DEV": "true",
 		"process.env.IS_TEST": "true",
@@ -102,9 +94,13 @@ async function main() {
 	const srcCtx = await esbuild.context(srcConfig)
 	const testsCtx = await esbuild.context(testsConfig)
 
-	await Promise.all([srcCtx.rebuild(), testsCtx.rebuild()])
+	if (watch) {
+		await Promise.all([srcCtx.watch(), testsCtx.watch()])
+	} else {
+		await Promise.all([srcCtx.rebuild(), testsCtx.rebuild()])
 
-	await Promise.all([srcCtx.dispose(), testsCtx.dispose()])
+		await Promise.all([srcCtx.dispose(), testsCtx.dispose()])
+	}
 }
 
 main().catch((e) => {
