@@ -2,13 +2,13 @@ import { describe, it, beforeEach, afterEach } from "mocha"
 import { expect } from "chai"
 import { getShell } from "../utils/shell"
 import * as vscode from "vscode"
-import * as os from "os"
-import Sinon from "sinon"
+import { userInfo } from "os"
 
 describe("Shell Detection Tests", () => {
-	let sandbox: sinon.SinonSandbox
 	let originalPlatform: string
 	let originalEnv: NodeJS.ProcessEnv
+	let originalGetConfig: typeof vscode.workspace.getConfiguration
+	let originalUserInfo: typeof userInfo
 
 	// Helper to mock VS Code configuration
 	function mockVsCodeConfig(platformKey: string, defaultProfileName: string | null, profiles: Record<string, any>) {
@@ -26,30 +26,27 @@ describe("Shell Detection Tests", () => {
 			}) as any
 	}
 
-	const setFakeShell = (shell: string | null) => {
-		sandbox.stub(os, "userInfo").returns({ shell } as any)
-	}
-
 	beforeEach(() => {
-		sandbox = Sinon.createSandbox()
-
 		// Store original references
 		originalPlatform = process.platform
 		originalEnv = { ...process.env }
+		originalGetConfig = vscode.workspace.getConfiguration
+		originalUserInfo = userInfo
 
 		// Clear environment variables for a clean test
 		delete process.env.SHELL
 		delete process.env.COMSPEC
 
 		// Default userInfo() mock
-		setFakeShell(null)
+		;(userInfo as any) = () => ({ shell: null })
 	})
 
 	afterEach(() => {
-		sandbox.restore()
 		// Restore everything
 		Object.defineProperty(process, "platform", { value: originalPlatform })
 		process.env = originalEnv
+		vscode.workspace.getConfiguration = originalGetConfig
+		;(userInfo as any) = originalUserInfo
 	})
 
 	// --------------------------------------------------------------------------
@@ -109,7 +106,7 @@ describe("Shell Detection Tests", () => {
 
 		it("respects userInfo() if no VS Code config is available", () => {
 			vscode.workspace.getConfiguration = () => ({ get: () => undefined }) as any
-			setFakeShell("C:\\Custom\\PowerShell.exe")
+			;(userInfo as any) = () => ({ shell: "C:\\Custom\\PowerShell.exe" })
 
 			expect(getShell()).to.equal("C:\\Custom\\PowerShell.exe")
 		})
@@ -139,7 +136,7 @@ describe("Shell Detection Tests", () => {
 
 		it("falls back to userInfo().shell if no VS Code config is available", () => {
 			vscode.workspace.getConfiguration = () => ({ get: () => undefined }) as any
-			setFakeShell("/opt/homebrew/bin/zsh")
+			;(userInfo as any) = () => ({ shell: "/opt/homebrew/bin/zsh" })
 
 			expect(getShell()).to.equal("/opt/homebrew/bin/zsh")
 		})
@@ -175,7 +172,7 @@ describe("Shell Detection Tests", () => {
 
 		it("falls back to userInfo().shell if no VS Code config is available", () => {
 			vscode.workspace.getConfiguration = () => ({ get: () => undefined }) as any
-			setFakeShell("/usr/bin/zsh")
+			;(userInfo as any) = () => ({ shell: "/usr/bin/zsh" })
 
 			expect(getShell()).to.equal("/usr/bin/zsh")
 		})
@@ -210,7 +207,7 @@ describe("Shell Detection Tests", () => {
 			vscode.workspace.getConfiguration = () => {
 				throw new Error("Configuration error")
 			}
-			setFakeShell("/bin/bash")
+			;(userInfo as any) = () => ({ shell: "/bin/bash" })
 
 			expect(getShell()).to.equal("/bin/bash")
 		})
@@ -218,11 +215,9 @@ describe("Shell Detection Tests", () => {
 		it("handles userInfo errors gracefully, falling back to environment variable if present", () => {
 			Object.defineProperty(process, "platform", { value: "darwin" })
 			vscode.workspace.getConfiguration = () => ({ get: () => undefined }) as any
-
-			sandbox.stub(os, "userInfo").callsFake(() => {
+			;(userInfo as any) = () => {
 				throw new Error("userInfo error")
-			})
-
+			}
 			process.env.SHELL = "/bin/zsh"
 
 			expect(getShell()).to.equal("/bin/zsh")
@@ -233,10 +228,9 @@ describe("Shell Detection Tests", () => {
 			vscode.workspace.getConfiguration = () => {
 				throw new Error("Configuration error")
 			}
-			sandbox.stub(os, "userInfo").callsFake(() => {
+			;(userInfo as any) = () => {
 				throw new Error("userInfo error")
-			})
-
+			}
 			// No SHELL in env
 			delete process.env.SHELL
 
