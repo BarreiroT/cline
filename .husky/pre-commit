@@ -14,4 +14,22 @@ npm run format || {
     exit 1
 }
 
+echo "Running tests..."
+npm run pretest
+npm run test:integration || {
+    # At least one check suggests we're in a terminal
+    if [ -t 1 ] || [ -t 2 ] || [ -t 0 ] || [ -n "$TERM" ]; then
+        echo "Tests failed. Do you wish to commit anyway (y/n)?"
+        exec < /dev/tty
+        read -r reply
+        case "$reply" in
+        [Yy]) ;; # Continue
+        *) exit 1 ;; # Fail
+        esac
+    else
+        echo "❌ Tests failed and not running in interactive terminal."
+        echo "Ignoring failure."
+    fi
+}
+
 echo "✅ All checks passed!"
