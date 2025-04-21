@@ -299,7 +299,7 @@
 		"package:test": "IS_TEST=true npm run build:webview:test && npm run check-types && npm run lint && IS_TEST=true node esbuild.js --production",
 		"build:webview:test": "cd webview-ui && IS_TEST=true npm run build",
 		"watch:test": "IS_TEST=true npm-run-all -p watch:tsc watch:esbuild:test",
-		"compile-tests": "tsc -p ./tsconfig.test.json --outDir out",
+		"compile-tests": "node ./scripts/build-tests.js",
 		"watch-tests": "tsc -p . -w --outDir out",
 		"pretest": "npm run compile-tests && npm run compile && npm run lint",
 		"check-types": "tsc --noEmit",
