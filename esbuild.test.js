@@ -23,6 +23,21 @@ const esbuildProblemMatcherPlugin = {
 	},
 }
 
+const ESModules = [
+	"@sindresorhus/merge-streams",
+	"parse-ms",
+	"pretty-ms",
+	"strip-final-newline",
+	"human-signals",
+	"unicorn-magic",
+	"npm-run-path",
+	"js2c",
+	"yoctocolors",
+	"figures",
+	"globby",
+	"execa",
+]
+
 const srcFiles = glob.sync("src/**/*.ts").filter((file) => !file.endsWith(".test.ts"))
 
 const srcConfig = {
@@ -43,22 +58,25 @@ const srcConfig = {
 	plugins: [
 		esbuildProblemMatcherPlugin,
 		{
-			name: "prevent-src-bundling",
+			name: "bundle-esm",
 			setup(build) {
 				build.onResolve({ filter: /.*/ }, (args) => {
-					const isRelativeImport = args.path.startsWith("./") || args.path.startsWith("../")
-					const isInSrcDir = args.resolveDir.includes("/src/")
-
-					// This way, we prevent bundling all the src for every file
-					// and only bundle modules other than vscode
-					if (isInSrcDir && isRelativeImport) {
-						// Keep relative imports as-is
-						// to import them from within the out directory
-						return { path: args.path, external: true }
+					// Skip entry points
+					if (args.kind === "entry-point") {
+						return null
 					}
 
-					// Handle normal imports using the `external` option
-					return null
+					// Bundle ES modules into the src code
+					// This will also bundle imports from those modules. For example, if
+					// execa imports ./lib/index.js, it will also be bundled.
+					const isESModuleResolving = ESModules.some((module) => args.importer.includes(module))
+					const isModuleResolvingRelative = args.path.startsWith("./") || args.path.startsWith("../")
+					if ((isESModuleResolving && isModuleResolvingRelative) || ESModules.includes(args.path)) {
+						return { external: false }
+					}
+
+					// Mark all other modules as external
+					return { external: true }
 				})
 			},
 		},
@@ -85,6 +103,7 @@ const testsConfig = {
 	platform: "node",
 	plugins: [esbuildProblemMatcherPlugin],
 	tsconfig: "tsconfig.test.json",
+	target: "es2022",
 	define: {
 		"process.env.IS_DEV": "true",
 		"process.env.IS_TEST": "true",
