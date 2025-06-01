@@ -7,6 +7,7 @@ import { ApiHandlerOptions, geminiDefaultModelId, GeminiModelId, geminiModels, M
 import { convertAnthropicMessageToGemini } from "../transform/gemini-format"
 import { ApiStream } from "../transform/stream"
 import { telemetryService } from "@services/posthog/telemetry/TelemetryService"
+import { CreateMessageError } from "../error"
 
 // Define a default TTL for the cache (e.g., 15 minutes in seconds)
 const DEFAULT_CACHE_TTL_SECONDS = 900
@@ -169,10 +170,8 @@ export class GeminiHandler implements ApiHandler {
 			if (error instanceof Error) {
 				apiError = error.message
 
-				// Gemini doesn't include status codes in their errors
-				// https://github.com/googleapis/js-genai/blob/61f7f27b866c74333ca6331883882489bcb708b9/src/_api_client.ts#L569
-				if (error.name === "ClientError" && error.message.includes("got status: 429 Too Many Requests.")) {
-					;(error as any).status = 429
+				if (error.name === "ClientError") {
+					throw new GeminiCreateMessageError(error)
 				}
 			} else {
 				apiError = String(error)
@@ -354,5 +353,55 @@ export class GeminiHandler implements ApiHandler {
 		}, 0)
 
 		return Math.ceil(totalChars / 4)
+	}
+}
+
+class GeminiCreateMessageError extends Error implements CreateMessageError {
+	status?: number
+	retryDelay?: number
+
+	constructor(error: Error) {
+		super(error.message)
+		Object.assign(this, error) // Copies all enumerable properties
+
+		const response = extractResponseFromError(error)
+		this.status = response.status
+		this.retryDelay = response.delay
+	}
+}
+
+function extractResponseFromError(error: Error): { status?: number; delay?: number } {
+	const nextDot = error.message.indexOf(".")
+	if (nextDot !== -1) {
+		try {
+			// The response from the actual API is formatted by the Gemini SDK
+			// You can find the code that formats the error response here:
+			// https://github.com/googleapis/js-genai/blob/main/src/_api_client.ts#L561-L565
+			const genAiError = JSON.parse(error.message.substring(nextDot + 1).trim())
+			if (genAiError.error) {
+				const errorResponse = JSON.parse(genAiError.error.message)
+
+				const retryDelay = errorResponse.error.details.find(
+					(detail: any) => detail["@type"] === "type.googleapis.com/google.rpc.RetryInfo",
+				)?.retryDelay
+
+				return {
+					status: genAiError.error.code,
+					// Needs to be parsed because the API returns "20s"
+					// I haven't seen other units, so it should be okay to interpret it as seconds
+					delay: retryDelay ? parseInt(retryDelay, 10) : undefined,
+				}
+			}
+		} catch {}
+	}
+
+	// Error responses are prefixed with "got status: " followed by the status code
+	// We need to extract the status code (3 digits), from the beggining of the code,
+	// which is the index that follows the prefix.
+	// https://github.com/googleapis/js-genai/blob/61f7f27b866c74333ca6331883882489bcb708b9/src/_api_client.ts#L569
+	const prefix = "got status: "
+	const status = error.message.substring(prefix.length, 3)
+	return {
+		status: parseInt(status, 10),
 	}
 }
