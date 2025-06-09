@@ -32,6 +32,8 @@ const AppContent = () => {
 		hideAnnouncement,
 	} = useExtensionState()
 
+	// Fake change
+
 	useEffect(() => {
 		if (shouldShowAnnouncement) {
 			setShowAnnouncement(true)
