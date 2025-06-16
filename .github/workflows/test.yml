@@ -50,7 +50,7 @@ jobs:
               id: root-cache
               with:
                   path: node_modules
-                  key: ${{ runner.os }}-npm-${{ hashFiles('package-lock.json') }}-v2
+                  key: ${{ runner.os }}-npm-${{ hashFiles('package-lock.json') }}
 
             # Cache webview-ui dependencies - only reuse if package-lock.json exactly matches
             - name: Cache webview-ui dependencies
