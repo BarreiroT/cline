@@ -4,7 +4,6 @@ import { type ApiHandler } from ".."
 import { ApiStreamUsageChunk, type ApiStream } from "../transform/stream"
 import { withRetry } from "../retry"
 import { runClaudeCode } from "@/integrations/claude-code/run"
-import { filterMessagesForClaudeCode } from "@/integrations/claude-code/message-filter"
 
 interface ClaudeCodeHandlerOptions {
 	claudeCodePath?: string
@@ -25,12 +24,9 @@ export class ClaudeCodeHandler implements ApiHandler {
 		maxDelay: 15000,
 	})
 	async *createMessage(systemPrompt: string, messages: Anthropic.Messages.MessageParam[]): ApiStream {
-		// Filter out image blocks since Claude Code doesn't support them
-		const filteredMessages = filterMessagesForClaudeCode(messages)
-
 		const claudeProcess = runClaudeCode({
 			systemPrompt,
-			messages: filteredMessages,
+			messages,
 			path: this.options.claudeCodePath,
 			modelId: this.getModel().id,
 			thinkingBudgetTokens: this.options.thinkingBudgetTokens,
